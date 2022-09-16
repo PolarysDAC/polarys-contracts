@@ -26,11 +26,14 @@ const chainIds = {
   // fantom
   opera: 250,
   ftmTestnet: 4002,
+  // metis
+  stardust: 588,
+  andromeda: 1088
 };
 
 const ALCHEMY_KEY = process.env.ALCHEMY_KEY || "";
-
 const PRIVATE_KEY = process.env.PK || "";
+const METIS_PK = process.env.METIS_PK || "";
 
 const ETHERSCAN_KEY = process.env.ETHERSCAN_KEY || "";
 const POLYGONSCAN_KEY = process.env.POLYGONSCAN_KEY || "";
@@ -93,6 +96,18 @@ const config = {
       accounts: [PRIVATE_KEY],
       gasMultiplier: 1.25
     },
+    stardust: {
+      url: "https://stardust.metis.io/?owner=588",
+      accounts: [METIS_PK],
+      chainId: 588,
+      gasMultiplier: 1.25
+    },
+    andromeda: {
+      url: "https://andromeda.metis.io/?owner=1088",
+      accounts: [PRIVATE_KEY],
+      chainId: 1088,
+      gasMultiplier: 1.25
+    }
   },
   etherscan: {
     apiKey: {
@@ -111,12 +126,15 @@ const config = {
       // fantom
       opera: FANTOM_KEY,
       ftmTestnet: FANTOM_KEY,
+      // metis
+      metisAndromeda: ETHERSCAN_KEY,
+      metisStardust: ETHERSCAN_KEY,
     },
   },
   solidity: {
     compilers: [
       {
-        version: "0.8.15",
+        version: "0.8.16",
         settings: {
           optimizer: {
             enabled: true,

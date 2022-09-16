@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.16;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -35,7 +35,7 @@ contract TokenVesting is Ownable, ReentrancyGuard {
     // uint public constant DECIMAL_FACTOR = 10 ** 6;
 
     /// Polarys TOKEN
-    IERC20 public immutable blastToken;
+    IERC20 public immutable polarysToken;
 
     struct VestingSchedule {
         // beneficiary of tokens after they are released
@@ -71,8 +71,8 @@ contract TokenVesting is Ownable, ReentrancyGuard {
     );
     event Revoked(bytes32 vestingScheduleId, uint256 revokeTimestamp);
 
-    constructor(IERC20 _blastToken) {
-        blastToken = _blastToken;
+    constructor(IERC20 _polarysToken) {
+        polarysToken = _polarysToken;
     }
 
     /// <=============== MUTATIVE METHODS ===============>
@@ -157,7 +157,7 @@ contract TokenVesting is Ownable, ReentrancyGuard {
         if (releasableAmount < amount) revert NotEnoughTokens();
         vestingSchedule.released = vestingSchedule.released + amount;
         vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - amount;
-        blastToken.safeTransfer(vestingSchedule.beneficiary, amount);
+        polarysToken.safeTransfer(vestingSchedule.beneficiary, amount);
         emit Released(msg.sender, vestingScheduleId, amount, block.timestamp);
     }
 
@@ -169,7 +169,7 @@ contract TokenVesting is Ownable, ReentrancyGuard {
      */
     function getWithdrawableAmount() public view returns (uint256) {
         return
-            blastToken.balanceOf(address(this)) - vestingSchedulesTotalAmount;
+            polarysToken.balanceOf(address(this)) - vestingSchedulesTotalAmount;
     }
 
     /**
