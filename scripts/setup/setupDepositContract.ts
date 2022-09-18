@@ -1,6 +1,6 @@
 import { ethers } from 'hardhat';
 import { formatUnits } from "ethers/lib/utils";
-import { DepositContract } from "../../typechain-types";
+import { PolarDepositContract } from "../../typechain-types";
 
 import 'dotenv/config';
 import { load } from "../utils"
@@ -12,11 +12,11 @@ const ADMIN_ROLE_ACCOUNT = process.env.ADMIN_ROLE_ACCOUNT
 
 async function main () {
   let signer: Signer
-  let depositContract: DepositContract
+  let depositContract: PolarDepositContract
 
-  const depositContractAddress = (await load('DepositContract')).address
+  const depositContractAddress = (await load('PolarDepositContract')).address
 
-  depositContract = (await ethers.getContractAt("DepositContract", depositContractAddress)) as DepositContract;
+  depositContract = (await ethers.getContractAt("PolarDepositContract", depositContractAddress)) as PolarDepositContract;
   [signer] = await ethers.getSigners()
   
   await (

@@ -7,18 +7,13 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-    const polarTokenTreasury = process.env.POLAR_TOKEN_TREASURY!
-    const polarTokenOwner = process.env.POLAR_TOKEN_OWNER!
-    const contractAddress = (await load('PolarToken')).address
+    const polarTokenAddress = (await load('PolarToken')).address
+    const contractAddress = (await load('TokenVestingContract')).address
     console.log(contractAddress)
     await hre.run("verify:verify", {
         address: contractAddress,
         constructorArguments: [
-            "POLAR Token",
-            "POLAR",
-            polarTokenOwner,
-            polarTokenTreasury,
-            parseUnits("1000000000", 18)
+            polarTokenAddress
         ],
     });
 }

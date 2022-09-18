@@ -62,7 +62,11 @@ contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
             return _privateSalePrice;
         }
     }
-
+    
+    function getSaleStatus() view external returns (SaleStatus) {
+        return _saleStatus;
+    }
+    
     function startPrivateSale() external onlyOwner {
         require(_saleStatus == SaleStatus.NOT_STARTED, "Only allowed if status is not started");
         _saleStatus = SaleStatus.PRIVATE_SALE;

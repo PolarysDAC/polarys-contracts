@@ -64,7 +64,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
     ) external {
         require(_msgSender() == tx.origin, "Contract address is not allowed");
         require(block.timestamp <= deadline, "Invalid expiration in deposit");
-        require(quantity <= 10, "Can not mint NFTs more than 10 NFTs");
+        require(quantity <= 10, "Can not purchase more than 10 tokens");
         require(status > 0, "Sale is not started yet");
         require(_verify(_hash(_msgSender(), quantity, amount, deadline, status), signature), "Invalid signature");
 

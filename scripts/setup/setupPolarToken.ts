@@ -1,64 +1,46 @@
 import { ethers } from 'hardhat';
 import { formatUnits } from "ethers/lib/utils";
-import { PolarysNFTContract } from "../typechain-types";
+import { providers } from 'ethers';
+import { PolarToken } from "../../typechain-types";
 
 import 'dotenv/config';
-import { load } from "./utils"
+import { load } from "../utils"
 import {
   getBigNumber,
-} from '../test/utils'
+} from '../../test/utils'
 
 import { Signer } from 'ethers';
 
+const PRIVATE_SALE_PRICE = 0.02;
+const PUBLIC_SALE_PRICE = 0.04;
+const DECIMALS = 6;
+
 async function main () {
-  let signer: Signer
-  let nftContract: PolarysNFTContract
+  let polarTokenContract: PolarToken
 
-  const DECIMALS = 6;
-  const PRIVATE_SALE_PRICE = 250;
-  const PUBLIC_SALE_PRICE = 300;
-  const ROYALTY_FEE = 250;   // 2.5% royalty fee
-
-  const minterWalletAddress = String(process.env.MINTER_WALLET)
-  const baseURI = String(process.env.BASE_URI)
-  const nftContractAddress = (await load('PolarysNFTContract')).address
-
-  nftContract = (await ethers.getContractAt("PolarysNFTContract", nftContractAddress)) as PolarysNFTContract;
-  [signer] = await ethers.getSigners()
+  const owner = process.env.POLAR_TOKEN_OWNER!
+  const polarTokenAddress = (await load('PolarToken')).address
   
-  const transaction1 = await nftContract
+  //testnet
+  const provider = await new providers.JsonRpcProvider("https://stardust.metis.io/?owner=588");
+
+  //mainnet
+  // const provider = await new providers.JsonRpcProvider("https://andromeda.metis.io/?owner=1088");
+
+  polarTokenContract = (await ethers.getContractAt("PolarToken", polarTokenAddress)) as PolarToken;
+  let signer: Signer = new ethers.Wallet(String(owner), provider)
+  
+  const transaction1 = await polarTokenContract
     .connect(signer).setPrivateSalePrice(getBigNumber(PRIVATE_SALE_PRICE, DECIMALS));
   await transaction1.wait();
   
-  const transaction2 = await nftContract
+  const transaction2 = await polarTokenContract
     .connect(signer).setPublicSalePrice(getBigNumber(PUBLIC_SALE_PRICE, DECIMALS));
   await transaction2.wait();
   
-  const salePrice = formatUnits(await nftContract.getSalePrice(), DECIMALS);
+  const salePrice = formatUnits(await polarTokenContract.getSalePrice(), DECIMALS);
   console.log("Sale Price: ", salePrice);
 
-  
-  await (
-    await nftContract
-    .connect(signer)
-    .setupMinterRole(minterWalletAddress)
-  ).wait();
-  console.log("Setup minter role");
-
-  await (
-    await nftContract
-    .connect(signer)
-    .setRoyaltyFee(ROYALTY_FEE)
-  ).wait();
-  
-  await (
-    await nftContract
-    .connect(signer)
-    .setBaseURI(baseURI)
-  ).wait();
-
-  const newRoyaltyFee = formatUnits(await nftContract.getRoyaltyFee(), 0);
-  console.log("royalty fee: ", newRoyaltyFee);
 }
 
 main()
