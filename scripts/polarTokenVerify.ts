@@ -1,15 +1,16 @@
 import hre from "hardhat";
 import { ethers } from 'hardhat'
 import { load } from "./utils"
-import { parseUnits } from 'ethers/lib/utils'
+import { getBigNumber } from '../test/utils';
 
 import * as dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-    const polarTokenTreasury = process.env.POLAR_TOKEN_TREASURY!
-    const polarTokenOwner = process.env.POLAR_TOKEN_OWNER!
-    const contractAddress = (await load('PolarToken')).address
+    const polarTokenTreasury = String(process.env.POLAR_TOKEN_TREASURY!);
+    const polarTokenOwner = String(process.env.POLAR_TOKEN_OWNER!);
+    const totalSupply = getBigNumber("1000000000");
+    const contractAddress = (await load('PolarToken')).address;
     console.log(contractAddress)
     await hre.run("verify:verify", {
         address: contractAddress,
@@ -18,7 +19,7 @@ async function main() {
             "POLAR",
             polarTokenOwner,
             polarTokenTreasury,
-            parseUnits("1000000000", 18)
+            totalSupply
         ],
     });
 }

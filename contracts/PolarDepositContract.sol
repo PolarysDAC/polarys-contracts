@@ -24,6 +24,8 @@ contract PolarDepositContract is AccessControl, EIP712 {
 
     address private immutable _acceptToken;
 
+    mapping(uint256 => uint256) private _totalSalesByStatus;
+
     bytes32 public immutable merkleRoot;
 
     constructor(address acceptToken, bytes32 merkleRoot_) EIP712("PolarDepositContract", "1.0.0") {
@@ -46,6 +48,11 @@ contract PolarDepositContract is AccessControl, EIP712 {
         _grantRole(DEPOSIT_ROLE, account);
     }
     
+
+    function getTotalSales(uint256 status) view external returns(uint256) {
+        return _totalSalesByStatus[status];
+    }
+
     /**
     @dev Deposit Token
     @param quantity NFT items quantity
@@ -64,7 +71,6 @@ contract PolarDepositContract is AccessControl, EIP712 {
     ) external {
         require(_msgSender() == tx.origin, "Contract address is not allowed");
         require(block.timestamp <= deadline, "Invalid expiration in deposit");
-        require(quantity <= 10, "Can not purchase more than 10 tokens");
         require(status > 0, "Sale is not started yet");
         require(_verify(_hash(_msgSender(), quantity, amount, deadline, status), signature), "Invalid signature");
 
@@ -77,7 +83,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
                 revert InvalidPrivateSaleAddress(_msgSender());
             }
         }
-
+        _totalSalesByStatus[status] += quantity;
         IERC20(_acceptToken).safeTransferFrom(_msgSender(), address(this), amount);
         emit DepositedToken(_acceptToken, _msgSender(), quantity, amount);
     }

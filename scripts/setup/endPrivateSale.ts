@@ -11,7 +11,7 @@ import { Signer } from 'ethers';
 async function main () {
   let polarTokenContract: PolarToken
 
-  const owner = process.env.POLAR_TOKEN_OWNER!
+  const ownerPK = process.env.POLAR_TOKEN_OWNER_PK!
   const polarTokenAddress = (await load('PolarToken')).address
   
   //testnet
@@ -21,7 +21,7 @@ async function main () {
   // const provider = await new providers.JsonRpcProvider("https://andromeda.metis.io/?owner=1088");
 
   polarTokenContract = (await ethers.getContractAt("PolarToken", polarTokenAddress)) as PolarToken;
-  let signer: Signer = new ethers.Wallet(String(owner), provider)
+  let signer: Signer = new ethers.Wallet(String(ownerPK), provider)
   
   await (
     await (
