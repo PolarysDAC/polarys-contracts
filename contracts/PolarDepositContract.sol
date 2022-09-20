@@ -12,7 +12,7 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 contract PolarDepositContract is AccessControl, EIP712 {
     using SafeERC20 for IERC20;
     
-    event DepositedToken(address indexed tokenAddress, address indexed sender, uint256 quantity, uint256 amount);
+    event DepositedToken(address indexed tokenAddress, address indexed sender, uint256 quantity, uint256 status, uint256 amount);
     event WithdrawedToken(address indexed tokenAddress, address indexed recipient, uint256 amount);
     
     error InvalidPrivateSaleAddress(address account);
@@ -23,8 +23,6 @@ contract PolarDepositContract is AccessControl, EIP712 {
     bytes32 constant public DEPOSIT_TYPEHASH = keccak256("DepositToken(address account,uint256 quantity,uint256 amount,uint256 deadline,uint256 status)");
 
     address private immutable _acceptToken;
-
-    mapping(uint256 => uint256) private _totalSalesByStatus;
 
     bytes32 public immutable merkleRoot;
 
@@ -48,10 +46,6 @@ contract PolarDepositContract is AccessControl, EIP712 {
         _grantRole(DEPOSIT_ROLE, account);
     }
     
-
-    function getTotalSales(uint256 status) view external returns(uint256) {
-        return _totalSalesByStatus[status];
-    }
 
     /**
     @dev Deposit Token
@@ -83,9 +77,8 @@ contract PolarDepositContract is AccessControl, EIP712 {
                 revert InvalidPrivateSaleAddress(_msgSender());
             }
         }
-        _totalSalesByStatus[status] += quantity;
         IERC20(_acceptToken).safeTransferFrom(_msgSender(), address(this), amount);
-        emit DepositedToken(_acceptToken, _msgSender(), quantity, amount);
+        emit DepositedToken(_acceptToken, _msgSender(), quantity, status, amount);
     }
     
     function _hash(address account, uint256 quantity, uint256 amount, uint256 deadline, uint256 status)
