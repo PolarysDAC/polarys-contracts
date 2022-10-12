@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
 import { formatUnits } from "ethers/lib/utils";
 import { providers } from 'ethers';
-import { TestToken, DepositContract } from "../../typechain-types";
+import { PolarDepositContract } from "../../typechain-types";
 
 import 'dotenv/config';
 import { load } from "../utils"
@@ -15,23 +15,22 @@ const ALCHEMY_KEY = process.env.ALCHEMY_KEY || "";
 
 async function main () {
   let signer: Signer
-  let depositContract: DepositContract
-  let testTokenContract: TestToken
+  let depositContract: PolarDepositContract
 
   const DECIMAL = 6
   const USER_PK = process.env.USER_PK
-  const quantity = 1
-  const amount = getBigNumber(250, DECIMAL)
+  const quantity = 150
+  const amount = getBigNumber(3, DECIMAL)
   const deadline = 1659558650
   const proof = ['0x102e237c0c12aa11b575b407a65408c9c30e88c4ba404f7d6bfb39c21bcd5b5a']
   const sign = "0xed32447fad25f7bdc3c1e40a23b7741f3b97814797c5d294c463452490511dc11cfe70e8f93a89397649a5e12ed4ba1459c448561a841c857da95d00d8c560cd1b"
   const saleStatus = 1
 
-  const depositContractAddress = (await load('DepositContract')).address
-  const testTokenAddress = (await load('TestTokenContract')).address
+  const depositContractAddress = (await load('PolarDepositContract')).address
+  // const testTokenAddress = (await load('TestTokenContract')).address
 
   depositContract = (await ethers.getContractAt("DepositContract", depositContractAddress)) as DepositContract;
-  testTokenContract = (await ethers.getContractAt("TestToken", testTokenAddress)) as TestToken;
+  // testTokenContract = (await ethers.getContractAt("TestToken", testTokenAddress)) as TestToken;
   // [signer] = await ethers.getSigners()
   
   //rinkeby provider
@@ -41,11 +40,11 @@ async function main () {
   // const provider = await new providers.JsonRpcProvider("https://polygon-mumbai.g.alchemy.com/v2/2nMHQF5YQQybtCijNX-tNWi9qo7PObMx");
   let userSigner: Signer = new ethers.Wallet(String(USER_PK), provider)
   
-  await (
-    await testTokenContract
-    .connect(userSigner)
-    .approve(depositContract.address, amount)
-  ).wait();
+  // await (
+  //   await testTokenContract
+  //   .connect(userSigner)
+  //   .approve(depositContract.address, amount)
+  // ).wait();
 
   const tx = await depositContract
     .connect(userSigner)

@@ -10,8 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 /// @dev Based on OpenZeppelin Contracts.
 contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
     
-    event SetPrivateSalePrice(uint256 price);
-    event SetPublicSalePrice(uint256 price);
     event StartedPrivateSale(SaleStatus indexed saleStatus, uint256 timestamp);
     event EndedPrivateSale(SaleStatus indexed saleStatus, uint256 timestamp);
 
@@ -20,8 +18,6 @@ contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
         PRIVATE_SALE,
         PUBLIC_SALE
     }
-    uint256 private _privateSalePrice;
-    uint256 private _publicSalePrice;
     SaleStatus private _saleStatus;
 
     /// @notice Token constructor
@@ -41,26 +37,6 @@ contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
         require(_owner != address(0), "Owner can't be zero address");
         _mint(_treasury, _treasurySupply);
         _transferOwnership(_owner);
-    }
-
-    function setPrivateSalePrice(uint256 price) external onlyOwner {
-        require(price <= 1000 * 1e6, "Should not exceed 1000");
-        _privateSalePrice = price;
-        emit SetPrivateSalePrice(price);
-    }
-
-    function setPublicSalePrice(uint256 price) external onlyOwner {
-        require(price <= 1000 * 1e6, "Should not exceed 1000");
-        _publicSalePrice = price;
-        emit SetPublicSalePrice(price);
-    }
-
-    function getSalePrice() view external returns(uint256) {
-        if(_saleStatus == SaleStatus.PUBLIC_SALE) {
-            return _publicSalePrice;
-        } else {
-            return _privateSalePrice;
-        }
     }
     
     function getSaleStatus() view external returns (SaleStatus) {
