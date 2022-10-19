@@ -4,6 +4,7 @@ pragma solidity 0.8.16;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /// cannot create vesting schedule because not sufficient tokens
@@ -13,7 +14,7 @@ error DurationInvalid();
 /// amount must be > 0
 error AmountInvalid();
 /// only beneficiary and owner can release vested tokens
-error BeneficiayrOrOwner();
+error BeneficiaryOrOwner();
 /// cannot release tokens, not enough vested tokens
 error NotEnoughTokens();
 /// Reverts if the vesting schedule has been revoked
@@ -25,14 +26,12 @@ error ZeroAddress();
 /// When create vesting schedule, in case of start time should be future
 error StartTimeInvalid();
 
-contract TokenVesting is Ownable, ReentrancyGuard {
+contract TokenVesting is Ownable, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     event CreatedVestingSchedule(address user, bytes32 scheduleId);
 
     /// <=============== STATE VARIABLES ===============>
-
-    // uint public constant DECIMAL_FACTOR = 10 ** 6;
 
     /// Polarys TOKEN
     IERC20 public immutable polarysToken;
@@ -58,10 +57,14 @@ contract TokenVesting is Ownable, ReentrancyGuard {
         bool revoked;
     }
 
+    bytes32 public constant VESTING_ROLE = keccak256("VESTING_ROLE");
+
     bytes32[] private vestingSchedulesIds;
     mapping(bytes32 => VestingSchedule) private vestingSchedules;
     uint256 private vestingSchedulesTotalAmount;
     mapping(address => uint256) private holdersVestingCount;
+
+    address private immutable treasury;
 
     event Released(
         address beneficiary,
@@ -71,11 +74,22 @@ contract TokenVesting is Ownable, ReentrancyGuard {
     );
     event Revoked(bytes32 vestingScheduleId, uint256 revokeTimestamp);
 
-    constructor(IERC20 _polarysToken) {
+    constructor(IERC20 _polarysToken, address _treasury, address _owner) {
+        require(_treasury != address(0), "Treasury can't be zero address");
         polarysToken = _polarysToken;
+        treasury = _treasury;
+        _setupRole(DEFAULT_ADMIN_ROLE, _owner);
     }
 
-    /// <=============== MUTATIVE METHODS ===============>
+    /// @notice Setup vesting role 
+    function setupVestingRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(VESTING_ROLE, account);
+    }
+
+    /// @notice Setup revoke role 
+    function revokeVestingRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(VESTING_ROLE, account);
+    }
 
     /// @notice Creates a new vesting schedule for a beneficiary
     function createVestingSchedule(
@@ -86,13 +100,14 @@ contract TokenVesting is Ownable, ReentrancyGuard {
         uint256 _immediateReleaseAmount,
         uint256 _amountTotal,
         bool _revocable
-    ) public onlyOwner {
+    ) external onlyRole(VESTING_ROLE) {
         if (_beneficiary == address(0)) revert ZeroAddress();
         if (getWithdrawableAmount() < (_amountTotal + _immediateReleaseAmount)) revert InsufficientTokens();
         if (_duration == 0) revert DurationInvalid();
         if (_amountTotal == 0) revert AmountInvalid();
         if (_start <= block.timestamp) revert StartTimeInvalid();
         if (_cliffDuration > _duration) revert DurationInvalid();
+        if (_cliffDuration <= 365 days ) revert DurationInvalid();
 
         bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(
             _beneficiary
@@ -121,12 +136,10 @@ contract TokenVesting is Ownable, ReentrancyGuard {
      * @notice Revokes the vesting schedule for given identifier.
      * @param vestingScheduleId the vesting schedule identifier
      */
-    function revoke(bytes32 vestingScheduleId) public onlyOwner {
-        if (vestingSchedules[vestingScheduleId].revoked)
+    function revoke(bytes32 vestingScheduleId) external onlyRole(VESTING_ROLE) {
+        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+        if (vestingSchedule.revoked)
             revert ScheduleRevoked();
-        VestingSchedule storage vestingSchedule = vestingSchedules[
-            vestingScheduleId
-        ];
         if (!vestingSchedule.revocable) revert NotRevocable();
         uint256 releasableAmount = _computeReleasableAmount(vestingSchedule);
         if (releasableAmount > 0) {
@@ -136,7 +149,8 @@ contract TokenVesting is Ownable, ReentrancyGuard {
             vestingSchedule.released;
         vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - unreleased;
         vestingSchedule.revoked = true;
-
+        polarysToken.safeTransfer(treasury, unreleased);
+        
         emit Revoked(vestingScheduleId, block.timestamp);
     }
 
@@ -145,19 +159,18 @@ contract TokenVesting is Ownable, ReentrancyGuard {
         public
         nonReentrant
     {
-        if (vestingSchedules[vestingScheduleId].revoked)
+        VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+        if (vestingSchedule.revoked)
             revert ScheduleRevoked();
-        VestingSchedule storage vestingSchedule = vestingSchedules[
-            vestingScheduleId
-        ];
-        bool isBeneficiary = msg.sender == vestingSchedule.beneficiary;
+        address beneficiary = vestingSchedule.beneficiary;
+        bool isBeneficiary = msg.sender == beneficiary;
         bool isOwner = msg.sender == owner();
-        if (!isBeneficiary && !isOwner) revert BeneficiayrOrOwner();
+        if (!isBeneficiary && !isOwner) revert BeneficiaryOrOwner();
         uint256 releasableAmount = _computeReleasableAmount(vestingSchedule);
         if (releasableAmount < amount) revert NotEnoughTokens();
         vestingSchedule.released = vestingSchedule.released + amount;
         vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - amount;
-        polarysToken.safeTransfer(vestingSchedule.beneficiary, amount);
+        polarysToken.safeTransfer(beneficiary, amount);
         emit Released(msg.sender, vestingScheduleId, amount, block.timestamp);
     }
 
@@ -202,7 +215,7 @@ contract TokenVesting is Ownable, ReentrancyGuard {
      * @return the vested amount
      */
     function computeReleasableAmount(bytes32 vestingScheduleId)
-        public
+        external
         view
         returns (uint256)
     {

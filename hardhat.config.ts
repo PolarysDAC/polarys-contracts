@@ -13,6 +13,7 @@ const chainIds = {
   // ethereum
   mainnet: 1,
   rinkeby: 4,
+  goerli: 5,
   ropsten: 3,
   // polygon
   mumbai: 80001,
@@ -31,7 +32,8 @@ const chainIds = {
   andromeda: 1088
 };
 
-const ALCHEMY_KEY = process.env.ALCHEMY_KEY || "";
+const GOERLI_ALCHEMY_KEY = process.env.GOERLI_ALCHEMY_KEY || "";
+const MUMBAI_ALCHEMY_KEY = process.env.MUMBAI_ALCHEMY_KEY || "";
 const PRIVATE_KEY = process.env.PK || "";
 const METIS_PK = process.env.METIS_PK || "";
 
@@ -54,9 +56,9 @@ const config = {
     hardhat: {
       chainId: 1337
     },
-    rinkeby: {
-      url: `https://eth-rinkeby.alchemyapi.io/v2/${ALCHEMY_KEY}`,
-      chainId: chainIds.rinkeby,
+    goerli: {
+      url: `https://eth-goerli.g.alchemy.com/v2/${GOERLI_ALCHEMY_KEY}`,
+      chainId: chainIds.goerli,
       accounts: [PRIVATE_KEY],
       gasMultiplier: 1.25
     },
@@ -73,7 +75,7 @@ const config = {
       gasMultiplier: 1.25
     },
     polygonMumbai: {
-      url: `https://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+      url: `https://polygon-mumbai.g.alchemy.com/v2/${MUMBAI_ALCHEMY_KEY}`,
       chainId: chainIds.mumbai,
       accounts: [PRIVATE_KEY],
       gasMultiplier: 1.25
@@ -113,7 +115,7 @@ const config = {
     apiKey: {
       // ethereum
       mainnet: ETHERSCAN_KEY,
-      rinkeby: ETHERSCAN_KEY,
+      goerli: ETHERSCAN_KEY,
       // polygon
       polygon: POLYGONSCAN_KEY,
       polygonMumbai: POLYGONSCAN_KEY,

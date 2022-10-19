@@ -20,11 +20,13 @@ contract PolarDepositContract is AccessControl, EIP712 {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant DEPOSIT_ROLE = keccak256("DEPOSIT_ROLE");
     
-    bytes32 constant public DEPOSIT_TYPEHASH = keccak256("DepositToken(address account,uint256 quantity,uint256 amount,uint256 deadline,uint256 status)");
+    bytes32 constant public DEPOSIT_TYPEHASH = keccak256("DepositToken(address account,uint256 quantity,uint256 amount,uint256 deadline,uint256 nonce,uint256 status)");
 
     address private immutable _acceptToken;
 
     bytes32 public immutable merkleRoot;
+
+    mapping(address => uint256) private _accountNonces;
 
     constructor(address acceptToken, bytes32 merkleRoot_) EIP712("PolarDepositContract", "1.0.0") {
         _acceptToken = acceptToken;
@@ -46,6 +48,12 @@ contract PolarDepositContract is AccessControl, EIP712 {
         _grantRole(DEPOSIT_ROLE, account);
     }
     
+    /**
+     * @dev Return nonce
+     */
+    function getAccountNonce(address account) external view returns(uint256) {
+        return _accountNonces[account];
+    }
 
     /**
     @dev Deposit Token
@@ -66,7 +74,8 @@ contract PolarDepositContract is AccessControl, EIP712 {
         require(_msgSender() == tx.origin, "Contract address is not allowed");
         require(block.timestamp <= deadline, "Invalid expiration in deposit");
         require(status > 0, "Sale is not started yet");
-        require(_verify(_hash(_msgSender(), quantity, amount, deadline, status), signature), "Invalid signature");
+        uint256 validNonce = _accountNonces[_msgSender()];
+        require(_verify(_hash(_msgSender(), quantity, amount, deadline, validNonce, status), signature), "Invalid signature");
 
         // if status is private_sale
         if (status == 1) {
@@ -77,11 +86,14 @@ contract PolarDepositContract is AccessControl, EIP712 {
                 revert InvalidPrivateSaleAddress(_msgSender());
             }
         }
+        unchecked {
+            ++ _accountNonces[_msgSender()];
+        }
         IERC20(_acceptToken).safeTransferFrom(_msgSender(), address(this), amount);
         emit DepositedToken(_acceptToken, _msgSender(), quantity, status, amount);
     }
     
-    function _hash(address account, uint256 quantity, uint256 amount, uint256 deadline, uint256 status)
+    function _hash(address account, uint256 quantity, uint256 amount, uint256 deadline, uint256 nonce, uint256 status)
     internal view returns (bytes32)
     {
         return _hashTypedDataV4(keccak256(abi.encode(
@@ -90,6 +102,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
             quantity,
             amount,
             deadline,
+            nonce,
             status
         )));
     }
