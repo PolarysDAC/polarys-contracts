@@ -3,7 +3,6 @@ pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
@@ -26,7 +25,7 @@ error ZeroAddress();
 /// When create vesting schedule, in case of start time should be future
 error StartTimeInvalid();
 
-contract TokenVesting is Ownable, AccessControl, ReentrancyGuard {
+contract TokenVesting is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     event CreatedVestingSchedule(address user, bytes32 scheduleId);
@@ -164,7 +163,7 @@ contract TokenVesting is Ownable, AccessControl, ReentrancyGuard {
             revert ScheduleRevoked();
         address beneficiary = vestingSchedule.beneficiary;
         bool isBeneficiary = msg.sender == beneficiary;
-        bool isOwner = msg.sender == owner();
+        bool isOwner = hasRole(VESTING_ROLE, msg.sender);
         if (!isBeneficiary && !isOwner) revert BeneficiaryOrOwner();
         uint256 releasableAmount = _computeReleasableAmount(vestingSchedule);
         if (releasableAmount < amount) revert NotEnoughTokens();
