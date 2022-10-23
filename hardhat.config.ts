@@ -28,7 +28,7 @@ const chainIds = {
   opera: 250,
   ftmTestnet: 4002,
   // metis
-  stardust: 588,
+  metisgoerli: 599,
   andromeda: 1088
 };
 
@@ -98,21 +98,21 @@ const config = {
       accounts: [PRIVATE_KEY],
       gasMultiplier: 1.25
     },
-    stardust: {
-      url: "https://stardust.metis.io/?owner=588",
-      accounts: [METIS_PK],
-      chainId: 588,
+    metisgoerli: {
+      url: "https://goerli.gateway.metisdevops.link",
+      accounts: [PRIVATE_KEY],
+      chainId: chainIds.metisgoerli,
       gasMultiplier: 1.25
     },
     andromeda: {
       url: "https://andromeda.metis.io/?owner=1088",
       accounts: [PRIVATE_KEY],
-      chainId: 1088,
+      chainId: chainIds.andromeda,
       gasMultiplier: 1.25
     }
   },
   etherscan: {
-    apiKey: {
+    apiKey: { 
       // ethereum
       mainnet: ETHERSCAN_KEY,
       goerli: ETHERSCAN_KEY,
@@ -130,8 +130,26 @@ const config = {
       ftmTestnet: FANTOM_KEY,
       // metis
       metisAndromeda: ETHERSCAN_KEY,
-      metisStardust: ETHERSCAN_KEY,
+      metisgoerli: ETHERSCAN_KEY,
     },
+    customChains: [
+      {
+        network: "andromeda",
+        chainId: chainIds.andromeda,
+        urls: {
+          apiURL: "https://andromeda-explorer.metis.io/api",
+          browserURL: "https://andromeda-explorer.metis.io",
+        },
+      },
+      {
+        network: "metisgoerli",
+        chainId: chainIds.metisgoerli,
+        urls: {
+          apiURL: "https://goerli.explorer.metisdevops.link/api",
+          browserURL: "https://goerli.explorer.metisdevops.link",
+        },
+      },
+    ],
   },
   solidity: {
     compilers: [

@@ -15,7 +15,7 @@ async function main () {
   const polarTokenAddress = (await load('PolarToken')).address
   
   //testnet
-  const provider = await new providers.JsonRpcProvider("https://stardust.metis.io/?owner=588");
+  const provider = await new providers.JsonRpcProvider("https://goerli.gateway.metisdevops.link");
 
   //mainnet
   // const provider = await new providers.JsonRpcProvider("https://andromeda.metis.io/?owner=1088");

@@ -12,6 +12,8 @@ contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
     
     event StartedPrivateSale(SaleStatus indexed saleStatus, uint256 timestamp);
     event EndedPrivateSale(SaleStatus indexed saleStatus, uint256 timestamp);
+    event AddedWhiteAddress(address indexed account);
+    event RemovedWhiteAddress(address indexed account);
 
     enum SaleStatus {
         NOT_STARTED,
@@ -19,6 +21,8 @@ contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
         PUBLIC_SALE
     }
     SaleStatus private _saleStatus;
+
+    mapping(address => bool) private _whitelist;
 
     /// @notice Token constructor
     /// @dev Creates the token and setup the initial supply and the Admin Role.
@@ -53,6 +57,20 @@ contract PolarToken is ERC20, ERC20Pausable, ERC20Burnable, Ownable {
         require(_saleStatus == SaleStatus.PRIVATE_SALE, "Only allowed if status is private sale");
         _saleStatus = SaleStatus.PUBLIC_SALE;
         emit EndedPrivateSale(_saleStatus, block.timestamp);
+    }
+
+    function addWhiteAddress(address account) external onlyOwner {
+        _whitelist[account] = true;
+        emit AddedWhiteAddress(account);
+    }
+
+    function removeWhiteAddress(address account) external onlyOwner {
+        _whitelist[account] = false;
+        emit RemovedWhiteAddress(account);
+    }
+
+    function isWhitelisted(address account) external view returns (bool) {
+        return _whitelist[account];
     }
 
     /// @notice Pauses the contract

@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 contract PolarDepositContract is AccessControl, EIP712 {
     using SafeERC20 for IERC20;
@@ -20,17 +19,14 @@ contract PolarDepositContract is AccessControl, EIP712 {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant DEPOSIT_ROLE = keccak256("DEPOSIT_ROLE");
     
-    bytes32 constant public DEPOSIT_TYPEHASH = keccak256("DepositToken(address account,uint256 quantity,uint256 amount,uint256 deadline,uint256 nonce,uint256 status)");
+    bytes32 constant public DEPOSIT_TYPEHASH = keccak256("DepositToken(address account,uint256 quantity,uint256 amount,uint256 deadline,uint256 nonce,uint256 status,bool isWhitelisted)");
 
     address private immutable _acceptToken;
 
-    bytes32 public immutable merkleRoot;
-
     mapping(address => uint256) private _accountNonces;
 
-    constructor(address acceptToken, bytes32 merkleRoot_) EIP712("PolarDepositContract", "1.0.0") {
+    constructor(address acceptToken) EIP712("PolarDepositContract", "1.0.0") {
         _acceptToken = acceptToken;
-        merkleRoot = merkleRoot_;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
     }
 
@@ -68,24 +64,16 @@ contract PolarDepositContract is AccessControl, EIP712 {
         uint256 amount, 
         uint256 deadline, 
         uint256 status, 
-        bytes calldata signature,
-        bytes32[] calldata merkleProof
+        bool isWhitelisted,
+        bytes calldata signature
     ) external {
         require(_msgSender() == tx.origin, "Contract address is not allowed");
         require(block.timestamp <= deadline, "Invalid expiration in deposit");
         require(status > 0, "Sale is not started yet");
+        require(status == 1 && isWhitelisted, "Not allowed in private sale");
         uint256 validNonce = _accountNonces[_msgSender()];
-        require(_verify(_hash(_msgSender(), quantity, amount, deadline, validNonce, status), signature), "Invalid signature");
+        require(_verify(_hash(_msgSender(), quantity, amount, deadline, validNonce, status, isWhitelisted), signature), "Invalid signature");
 
-        // if status is private_sale
-        if (status == 1) {
-            if (merkleProof.length > 0) {
-                // Verify the merkle proof.
-                require(MerkleProof.verify(merkleProof, merkleRoot, keccak256(abi.encodePacked(_msgSender()))), 'MerkleDistributor: Invalid proof.');
-            } else {
-                revert InvalidPrivateSaleAddress(_msgSender());
-            }
-        }
         unchecked {
             ++ _accountNonces[_msgSender()];
         }
@@ -93,7 +81,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
         emit DepositedToken(_acceptToken, _msgSender(), quantity, status, amount);
     }
     
-    function _hash(address account, uint256 quantity, uint256 amount, uint256 deadline, uint256 nonce, uint256 status)
+    function _hash(address account, uint256 quantity, uint256 amount, uint256 deadline, uint256 nonce, uint256 status, bool isWhitelisted)
     internal view returns (bytes32)
     {
         return _hashTypedDataV4(keccak256(abi.encode(
@@ -103,7 +91,8 @@ contract PolarDepositContract is AccessControl, EIP712 {
             amount,
             deadline,
             nonce,
-            status
+            status,
+            isWhitelisted
         )));
     }
 

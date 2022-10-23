@@ -6,10 +6,13 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
+    const adminAccount = process.env.ADMIN_ROLE_ACCOUNT!
     const polarTokenAddress = (await load('PolarToken')).address
     const factory = await ethers.getContractFactory("TokenVesting");
     const tokenVestingContract = await factory.deploy(
-        polarTokenAddress
+        polarTokenAddress,
+        adminAccount,
+        adminAccount
     );
     await tokenVestingContract.deployed();
     console.log("TokenVesting deployed to:", tokenVestingContract.address);
