@@ -130,6 +130,7 @@ const config = {
       ftmTestnet: FANTOM_KEY,
       // metis
       metisAndromeda: ETHERSCAN_KEY,
+      andromeda: ETHERSCAN_KEY,
       metisgoerli: ETHERSCAN_KEY,
     },
     customChains: [

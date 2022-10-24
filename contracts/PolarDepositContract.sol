@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+error NotAllowedInPrivateSale(address account);
+
 contract PolarDepositContract is AccessControl, EIP712 {
     using SafeERC20 for IERC20;
     
@@ -25,16 +27,9 @@ contract PolarDepositContract is AccessControl, EIP712 {
 
     mapping(address => uint256) private _accountNonces;
 
-    constructor(address acceptToken) EIP712("PolarDepositContract", "1.0.0") {
+    constructor(address acceptToken, address owner) EIP712("PolarDepositContract", "1.0.0") {
         _acceptToken = acceptToken;
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-    }
-
-    /**
-    @dev Setup multisig admin role
-     */
-    function setupAdminRole(address admin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _grantRole(ADMIN_ROLE, admin);
+        _setupRole(DEFAULT_ADMIN_ROLE, owner);
     }
 
     /**
@@ -70,7 +65,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
         require(_msgSender() == tx.origin, "Contract address is not allowed");
         require(block.timestamp <= deadline, "Invalid expiration in deposit");
         require(status > 0, "Sale is not started yet");
-        require(status == 1 && isWhitelisted, "Not allowed in private sale");
+        if(status == 1 && !isWhitelisted) revert NotAllowedInPrivateSale(_msgSender());
         uint256 validNonce = _accountNonces[_msgSender()];
         require(_verify(_hash(_msgSender(), quantity, amount, deadline, validNonce, status, isWhitelisted), signature), "Invalid signature");
 
@@ -106,7 +101,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
     @dev Withdraw Token
     * only Admin can execute this function
      */
-    function withdrawToken(address recipient, uint256 amount) external onlyRole(ADMIN_ROLE) {
+    function withdrawToken(address recipient, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         IERC20(_acceptToken).safeTransfer(recipient, amount);
         emit WithdrawedToken(_acceptToken, recipient, amount);
     }

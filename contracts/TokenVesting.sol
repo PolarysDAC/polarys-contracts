@@ -106,7 +106,7 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         if (_amountTotal == 0) revert AmountInvalid();
         if (_start <= block.timestamp) revert StartTimeInvalid();
         if (_cliffDuration > _duration) revert DurationInvalid();
-        if (_cliffDuration <= 365 days ) revert DurationInvalid();
+        if (_cliffDuration > 365 days) revert DurationInvalid();
 
         bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(
             _beneficiary
