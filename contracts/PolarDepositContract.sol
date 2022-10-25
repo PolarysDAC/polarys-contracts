@@ -18,7 +18,6 @@ contract PolarDepositContract is AccessControl, EIP712 {
     
     error InvalidPrivateSaleAddress(address account);
 
-    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant DEPOSIT_ROLE = keccak256("DEPOSIT_ROLE");
     
     bytes32 constant public DEPOSIT_TYPEHASH = keccak256("DepositToken(address account,uint256 quantity,uint256 amount,uint256 deadline,uint256 nonce,uint256 status,bool isWhitelisted)");
