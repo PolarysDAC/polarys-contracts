@@ -29,7 +29,10 @@ const chainIds = {
   ftmTestnet: 4002,
   // metis
   metisgoerli: 599,
-  andromeda: 1088
+  andromeda: 1088,
+  // arbitrum
+  arbitrum: 42161,
+  arbitrumGoerli: 421613,
 };
 
 const GOERLI_ALCHEMY_KEY = process.env.GOERLI_ALCHEMY_KEY || "";
@@ -42,6 +45,7 @@ const POLYGONSCAN_KEY = process.env.POLYGONSCAN_KEY || "";
 const BSCSCAN_KEY = process.env.BSCSCAN_KEY || "";
 const AVALANCHESCAN_KEY = process.env.AVALANCHESCAN_KEY || "";
 const FANTOM_KEY = process.env.FANTOMSCAN_KEY || "";
+const ARBISCAN_KEY = process.env.ARBISCAN_KEY || "";
 
 
 const ETH_RPC_URL = process.env.ETH_RPC_URL
@@ -49,12 +53,13 @@ const BSC_RPC_URL = process.env.BSC_RPC_URL
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL
 const AVAX_RPC_URL = process.env.AVAX_RPC_URL
 const FANTOM_RPC_URL = process.env.FANTOM_RPC_URL
+const ARBITRUM_RPC_URL = process.env.ARBITRUM_RPC_URL
 
 const config = {
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
-      chainId: 1337
+      // chainId: 1337
     },
     goerli: {
       url: `https://eth-goerli.g.alchemy.com/v2/${GOERLI_ALCHEMY_KEY}`,
@@ -100,7 +105,7 @@ const config = {
     },
     metisgoerli: {
       url: "https://goerli.gateway.metisdevops.link",
-      accounts: [PRIVATE_KEY],
+      accounts: [METIS_PK],
       chainId: chainIds.metisgoerli,
       gasMultiplier: 1.25
     },
@@ -109,7 +114,19 @@ const config = {
       accounts: [PRIVATE_KEY],
       chainId: chainIds.andromeda,
       gasMultiplier: 1.25
-    }
+    },
+    arbitrumOne: {
+      url: ARBITRUM_RPC_URL,
+      accounts: [PRIVATE_KEY],
+      chainId: chainIds.arbitrum,
+      gasMultiplier: 1.25
+    },
+    arbitrumGoerli: {
+      url: ARBITRUM_RPC_URL,
+      accounts: [PRIVATE_KEY],
+      chainId: chainIds.arbitrumGoerli,
+      gasMultiplier: 1.25
+    },
   },
   etherscan: {
     apiKey: { 
@@ -132,6 +149,9 @@ const config = {
       metisAndromeda: ETHERSCAN_KEY,
       andromeda: ETHERSCAN_KEY,
       metisgoerli: ETHERSCAN_KEY,
+      //arbitrum
+      arbitrumOne: ARBISCAN_KEY,
+      arbitrumGoerli: ARBISCAN_KEY,
     },
     customChains: [
       {

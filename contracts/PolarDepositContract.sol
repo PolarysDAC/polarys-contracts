@@ -8,11 +8,26 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+interface AggregatorV3Interface {
+    function latestRoundData()
+        external
+        view
+        returns (
+            uint80 roundId,
+            int answer,
+            uint startedAt,
+            uint updatedAt,
+            uint80 answeredInRound
+        );
+}
+
 error NotAllowedInPrivateSale(address account);
 
 contract PolarDepositContract is AccessControl, EIP712 {
     using SafeERC20 for IERC20;
     
+    AggregatorV3Interface internal priceFeed;
+
     event DepositedToken(address indexed tokenAddress, address indexed sender, uint256 quantity, uint256 status, uint256 amount);
     event WithdrawedToken(address indexed tokenAddress, address indexed recipient, uint256 amount);
     
@@ -26,9 +41,19 @@ contract PolarDepositContract is AccessControl, EIP712 {
 
     mapping(address => uint256) private _accountNonces;
 
-    constructor(address acceptToken, address owner) EIP712("PolarDepositContract", "1.0.0") {
+    uint256 public constant PUBLIC_SALE_PRICE = 25; // 0.025 with 3 decimals
+    uint256 public constant QUANTITY_DECIMAL = 1e6; // 6 decimals
+
+    constructor(
+        address acceptToken, 
+        address owner, 
+        address priceAggregator, 
+        address depositRoleAccount
+    ) EIP712("PolarDepositContract", "1.0.0") {
         _acceptToken = acceptToken;
+        priceFeed = AggregatorV3Interface(priceAggregator);
         _setupRole(DEFAULT_ADMIN_ROLE, owner);
+        _setupRole(DEPOSIT_ROLE, depositRoleAccount);
     }
 
     /**
@@ -75,6 +100,15 @@ contract PolarDepositContract is AccessControl, EIP712 {
         emit DepositedToken(_acceptToken, _msgSender(), quantity, status, amount);
     }
     
+    function depositNativeToken() payable external {
+        ( , int nativeTokenPrice, , , ) = priceFeed.latestRoundData();
+
+        uint depositedTokenPriceInUsd = msg.value * uint(nativeTokenPrice) / 1 ether;
+        uint quantity = depositedTokenPriceInUsd * 1e3 * QUANTITY_DECIMAL / PUBLIC_SALE_PRICE / 1e8;
+        // Send zero address to indicate native token
+        emit DepositedToken(address(0), _msgSender(), quantity, 2, msg.value);
+    }
+
     function _hash(address account, uint256 quantity, uint256 amount, uint256 deadline, uint256 nonce, uint256 status, bool isWhitelisted)
     internal view returns (bytes32)
     {
@@ -103,5 +137,13 @@ contract PolarDepositContract is AccessControl, EIP712 {
     function withdrawToken(address recipient, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         IERC20(_acceptToken).safeTransfer(recipient, amount);
         emit WithdrawedToken(_acceptToken, recipient, amount);
+    }
+
+    /// @dev Withdraw native token
+    function withdrawNativeToken(address recipient, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(address(this).balance >= amount, "Not enough balance");
+        (bool sent, ) = payable(recipient).call{value: amount}("");
+        require(sent, "Failed to send Native Token");
+        emit WithdrawedToken(address(0), recipient, amount);
     }
 }
