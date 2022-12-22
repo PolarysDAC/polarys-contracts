@@ -15,6 +15,3 @@ export enum TOKEN_NAME {
 export function getBigNumber(amount:number | string, decimals = 18) {
   return parseUnits(amount.toString(), decimals);
 }
-
-
-export * from './time'

@@ -5,11 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "hardhat/console.sol";
 
 /// cannot create vesting schedule because not sufficient tokens
 error InsufficientTokens();
-/// duration must be > 0
-error DurationInvalid();
 /// amount must be > 0
 error AmountInvalid();
 /// only beneficiary and owner can release vested tokens
@@ -22,13 +21,17 @@ error ScheduleRevoked();
 error NotRevocable();
 /// In case the address is zero
 error ZeroAddress();
-/// When create vesting schedule, in case of start time should be future
-error StartTimeInvalid();
+/// Vesting groupId is not set
+error InvalidVestingGroupId();
+/// Cannot set vesting StartTimestamp less than the current timestamp
+error InvalidStartTimestamp();
 
 contract TokenVesting is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     event CreatedVestingSchedule(address user, bytes32 scheduleId);
+
+    event SetUnlockMonthSchedule(uint256 vestingGroupIndex, uint256[] monthUnlockPercentList);
 
     /// <=============== STATE VARIABLES ===============>
 
@@ -38,12 +41,10 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
     struct VestingSchedule {
         // beneficiary of tokens after they are released
         address beneficiary;
-        // start time of the vesting period
-        uint256 start;
-        // cliffStart time in seconds
-        uint256 cliffStart;
-        // duration of the vesting period in seconds
-        uint256 duration;
+        // vesting start timestamp
+        uint256 startTimestamp;
+        // vesting group id
+        uint256 vestingGroupId;
         // the amount that is immediately vested at grant
         uint256 immediateVestedAmount;
         // total amount of tokens to be released at the end of the vesting EXCLUDING immediateVestedAmount
@@ -61,7 +62,8 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
     bytes32[] private vestingSchedulesIds;
     mapping(bytes32 => VestingSchedule) private vestingSchedules;
     uint256 private vestingSchedulesTotalAmount;
-    mapping(address => uint256) private holdersVestingCount;
+    mapping(address => uint256) private holdersVestingScheduleCount;
+    mapping(uint256 => uint256[]) private _monthUnlockPercentSchedules;
 
     address private immutable treasury;
 
@@ -90,33 +92,54 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         _revokeRole(VESTING_ROLE, account);
     }
 
-    /// @notice Creates a new vesting schedule for a beneficiary
+    /**
+     * @notice Set month unlock percents to vestingGroupId, this is performed by vestingRole account
+     * @param vestingGroupIndex vesting group id, starts from 0
+     * @param monthUnlockPercentList month unlock percents(%), has 2 decimals
+     */
+    function setUnlockMonthSchedule(uint256 vestingGroupIndex, uint256[] calldata monthUnlockPercentList) external onlyRole(VESTING_ROLE) {
+        uint256[] memory monthPercentList = monthUnlockPercentList;
+        uint256 monthCount = monthPercentList.length;
+        uint256 totalPercents;
+        for(uint256 i; i < monthCount; i = _unsafe_inc(i)) {
+            unchecked {
+                totalPercents = totalPercents + monthPercentList[i];
+            }
+            require(totalPercents <= 10000, "TotalPercent is limited to 100%");
+        }
+        _monthUnlockPercentSchedules[vestingGroupIndex] = monthPercentList;
+        emit SetUnlockMonthSchedule(vestingGroupIndex, monthPercentList);
+    }
+
+    /** @notice Creates a new vesting schedule for a beneficiary
+      * @param _beneficiary token recipient address 
+      * @param _startTimestamp vesting start timestamp
+      * @param _vestingGroupId vesting group id
+      * @param _immediateReleaseAmount initial release amount for _beneficiary
+      * @param _amountTotal total vesting amount exclude _immediateReleaseAmount
+      * @param _revocable check whether revocable
+    */ 
     function createVestingSchedule(
         address _beneficiary,
-        uint256 _start,
-        uint256 _cliffDuration,
-        uint256 _duration,
+        uint256 _startTimestamp,
+        uint256 _vestingGroupId,
         uint256 _immediateReleaseAmount,
         uint256 _amountTotal,
         bool _revocable
     ) external onlyRole(VESTING_ROLE) {
         if (_beneficiary == address(0)) revert ZeroAddress();
+        if (_startTimestamp < block.timestamp) revert InvalidStartTimestamp();
+        if (_monthUnlockPercentSchedules[_vestingGroupId].length == 0) revert InvalidVestingGroupId();
         if (getWithdrawableAmount() < (_amountTotal + _immediateReleaseAmount)) revert InsufficientTokens();
-        if (_duration == 0) revert DurationInvalid();
         if (_amountTotal == 0) revert AmountInvalid();
-        if (_start <= block.timestamp) revert StartTimeInvalid();
-        if (_cliffDuration > _duration) revert DurationInvalid();
-        if (_cliffDuration > 365 days) revert DurationInvalid();
 
-        bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(
+        bytes32 vestingScheduleId = _computeNextVestingScheduleIdForHolder(
             _beneficiary
         );
-        uint256 cliff = _start + _cliffDuration;
         vestingSchedules[vestingScheduleId] = VestingSchedule({
             beneficiary: _beneficiary,
-            start: _start,
-            cliffStart: cliff,
-            duration: _duration,
+            startTimestamp: _startTimestamp,
+            vestingGroupId: _vestingGroupId,
             immediateVestedAmount: _immediateReleaseAmount,
             amountTotal: _amountTotal,
             released: 0,
@@ -125,8 +148,8 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         });
         vestingSchedulesTotalAmount = vestingSchedulesTotalAmount + _amountTotal + _immediateReleaseAmount;
         vestingSchedulesIds.push(vestingScheduleId);
-        uint256 currentVestingCount = holdersVestingCount[_beneficiary];
-        holdersVestingCount[_beneficiary] = currentVestingCount + 1;
+        uint256 currentVestingCount = holdersVestingScheduleCount[_beneficiary];
+        holdersVestingScheduleCount[_beneficiary] = currentVestingCount + 1;
 
         emit CreatedVestingSchedule(_beneficiary, vestingScheduleId);
     }
@@ -144,11 +167,14 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         if (releasableAmount > 0) {
             release(vestingScheduleId, releasableAmount);
         }
-        uint256 unreleased = vestingSchedule.amountTotal -
-            vestingSchedule.released;
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - unreleased;
-        vestingSchedule.revoked = true;
-        polarysToken.safeTransfer(treasury, unreleased);
+        unchecked {
+            uint256 unreleased = vestingSchedule.amountTotal 
+            + vestingSchedule.immediateVestedAmount
+            - vestingSchedule.released;
+            vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - unreleased;
+            vestingSchedule.revoked = true;
+            polarysToken.safeTransfer(treasury, unreleased);
+        }
         
         emit Revoked(vestingScheduleId, block.timestamp);
     }
@@ -159,6 +185,7 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         nonReentrant
     {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
+        require(vestingSchedule.beneficiary != address(0), "Invalid vestingScheduleId");
         if (vestingSchedule.revoked)
             revert ScheduleRevoked();
         address beneficiary = vestingSchedule.beneficiary;
@@ -187,15 +214,15 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
     /**
      * @dev Computes the next vesting schedule identifier for a given holder address.
      */
-    function computeNextVestingScheduleIdForHolder(address holder)
-        public
+    function _computeNextVestingScheduleIdForHolder(address holder)
+        internal
         view
         returns (bytes32)
     {
         return
             computeVestingScheduleIdForAddressAndIndex(
                 holder,
-                holdersVestingCount[holder]
+                holdersVestingScheduleCount[holder]
             );
     }
 
@@ -210,6 +237,20 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Computes all vesting schedule ids of vesting holders
+     * @return vestingScheduleIds return all vesting schedule ids
+     */
+    function computeAllVestingScheduleIdsForAddress(
+        address holder
+    ) public view returns (bytes32[] memory vestingScheduleIds) {
+        uint256 vestingScheduleCount = holdersVestingScheduleCount[holder];
+        vestingScheduleIds = new bytes32[](vestingScheduleCount);
+        for (uint256 index; index < vestingScheduleCount; index = _unsafe_inc(index)) {
+            vestingScheduleIds[index] = keccak256(abi.encodePacked(holder, index));
+        }
+    }
+
+    /**
      * @notice Computes the vested amount of tokens for the given vesting schedule identifier.
      * @return the vested amount
      */
@@ -217,8 +258,12 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         external
         view
         returns (uint256)
-    {
-        if (vestingSchedules[vestingScheduleId].revoked)
+    {   
+        VestingSchedule memory memoryVestingSchedule = vestingSchedules[
+            vestingScheduleId
+        ];
+        require(memoryVestingSchedule.beneficiary != address(0), "Invalid vestingScheduleId");
+        if (memoryVestingSchedule.revoked)
             revert ScheduleRevoked();
         VestingSchedule storage vestingSchedule = vestingSchedules[
             vestingScheduleId
@@ -235,20 +280,30 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         view
         returns (uint256)
     {
-        uint256 currentTime = block.timestamp;
-        if (currentTime < vestingSchedule.cliffStart) {
-            return vestingSchedule.immediateVestedAmount - vestingSchedule.released;
-        } else if (
-            currentTime >= vestingSchedule.cliffStart + vestingSchedule.duration
-        ) {
-            return
-                vestingSchedule.amountTotal +
-                vestingSchedule.immediateVestedAmount -
-                vestingSchedule.released;
-        } else {
-            uint256 timeFromStart = currentTime - vestingSchedule.cliffStart;
-            uint256 vestedAmount = vestingSchedule.amountTotal * timeFromStart / vestingSchedule.duration;
-            vestedAmount = vestedAmount + vestingSchedule.immediateVestedAmount - vestingSchedule.released;
+        unchecked {
+            uint256 currentTime = block.timestamp;
+            uint256 vestedAmountByDefault = vestingSchedule.immediateVestedAmount - vestingSchedule.released;
+            if (vestingSchedule.startTimestamp > currentTime) { // vesting is not started yet
+                return vestedAmountByDefault;
+            }
+            uint256 monthCount = ((currentTime - vestingSchedule.startTimestamp) / 30 days) + 1;
+            uint256[] memory monthUnlockPercentList = _monthUnlockPercentSchedules[vestingSchedule.vestingGroupId];
+            if (monthCount > monthUnlockPercentList.length) {   // vesting period is ended
+                return vestingSchedule.amountTotal + vestedAmountByDefault;
+            }
+
+            uint256 unlockPercent = monthUnlockPercentList[monthCount-1];
+            if (unlockPercent == 0) {   // cliff period
+                return vestedAmountByDefault;
+            }
+            
+            // vesting period
+            uint256 totalPercents;
+            for (uint256 index; index < monthCount; ++ index) {
+                totalPercents = totalPercents + monthUnlockPercentList[index];
+            }
+            uint256 vestedAmount = vestingSchedule.amountTotal * totalPercents / 10000;
+            vestedAmount = vestedAmount + vestedAmountByDefault;
             return vestedAmount;
         }
     }
@@ -278,5 +333,11 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
             getVestingSchedule(
                 computeVestingScheduleIdForAddressAndIndex(holder, index)
             );
+    }
+
+    function _unsafe_inc(uint256 i) internal pure returns (uint256) {
+        unchecked {
+            return ++ i;
+        }
     }
 }
