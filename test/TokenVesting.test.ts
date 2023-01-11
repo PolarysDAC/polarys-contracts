@@ -11,7 +11,6 @@ import {
 import { BigNumber, BigNumberish, Contract, Signer } from 'ethers';
 
 type VestingAmounts = {
-  immediateReleaseAmount: BigNumber,
   amountTotal: BigNumber,
 };
 const vestingGroupMonthUnlockPercents = [
@@ -28,13 +27,25 @@ const vestingGroupMonthUnlockPercents = [
     0, 0, 0, 0, 200, 200, 350, 500, 750, 750, 750, 1000, 1000, 1500, 1500, 1500 
   ],
 ]
-const invalidVestingGroupMonthUnlockPercents = [
+const invalidVestingGroupMonthUnlockPercents1 = [
   [
     0, 0, 0, 0, 300, 200, 350, 500, 750, 750, 750, 1000, 1000, 1500, 1500, 1500 
   ],
   [
     0, 0, 0, 50000, 200, 200, 350, 500, 750, 750, 750, 1000, 1000, 1500, 1500, 1500 
   ],
+  [
+    0, 0, 0, 1000
+  ],
+]
+
+const invalidVestingGroupMonthUnlockPercents2 = [
+  [
+    0, 0, 0, 500, 0, 0, 350
+  ],
+  [
+    500, 350, 500, 750, 1000, 1000, 1500, 1500, 1500, 0
+  ]
 ]
 
 let aliceVestingScheduleIds: any[];
@@ -45,18 +56,15 @@ const ONE_MONTH = 60 * 60 * 24 * 30;
 let currentTimestamp: number;
 const aliceVestingAmounts: VestingAmounts[] = [
   { // airdrops
-    immediateReleaseAmount: getBigNumber(100), 
     amountTotal: getBigNumber(100000)
   },
   { // private sale
-    immediateReleaseAmount: getBigNumber(200), 
     amountTotal: getBigNumber(100000)
   }
 ];
 
 const bobVestingAmounts: VestingAmounts[] = [
   { // public sale
-    immediateReleaseAmount: getBigNumber(20), 
     amountTotal: getBigNumber(150000)
   }
 ];
@@ -147,12 +155,21 @@ describe('TokenVesting-Test', () => {
       );
     })
     it('Invalid month unlock percents are given', async () => {
-      for (let i = 0; i < invalidVestingGroupMonthUnlockPercents.length; i ++) {
+      for (let i = 0; i < invalidVestingGroupMonthUnlockPercents1.length; i ++) {
         await expect(
           vestingContract
           .connect(vestingRole)
-          .setUnlockMonthSchedule(i, invalidVestingGroupMonthUnlockPercents[i])
+          .setUnlockMonthSchedule(i, invalidVestingGroupMonthUnlockPercents1[i])
         ).to.be.revertedWith("TotalPercent is limited to 100%");
+      }
+    })
+    it('Invalid month schedules', async () => {
+      for (let i = 0; i < invalidVestingGroupMonthUnlockPercents2.length; i ++) {
+        await expect(
+          vestingContract
+          .connect(vestingRole)
+          .setUnlockMonthSchedule(i, invalidVestingGroupMonthUnlockPercents2[i])
+        ).to.be.revertedWith("Invalid month schedules");
       }
     })
     it('Set setUnlockMonthSchedule()', async () => {
@@ -163,6 +180,15 @@ describe('TokenVesting-Test', () => {
           .setUnlockMonthSchedule(i, vestingGroupMonthUnlockPercents[i])
         ).to.emit(vestingContract, "SetUnlockMonthSchedule")
         .withArgs(i, vestingGroupMonthUnlockPercents[i]);
+      }
+    })
+    it('Month schedule has already set', async () => {
+      for (let i = 0; i < vestingGroupMonthUnlockPercents.length; i ++) {
+        await expect(
+          vestingContract
+          .connect(vestingRole)
+          .setUnlockMonthSchedule(i, vestingGroupMonthUnlockPercents[i])
+        ).to.be.revertedWith("Month schedule has already set");
       }
     })
   });
@@ -177,7 +203,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + 100,
           0,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           aliceVestingAmounts[0].amountTotal,
           true
         )
@@ -193,7 +218,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp - 100,
           0,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           aliceVestingAmounts[0].amountTotal,
           true
         )
@@ -207,7 +231,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + 100,
           vestingGroupMonthUnlockPercents.length,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           aliceVestingAmounts[0].amountTotal,
           true
         )
@@ -221,7 +244,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + 100,
           0,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           aliceVestingAmounts[0].amountTotal,
           true
         )
@@ -245,7 +267,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + 100,
           0,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           getBigNumber('10000000'),
           true
         )
@@ -259,7 +280,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + 100,
           0,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           0,
           true
         )
@@ -273,7 +293,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + VESTING_TIME_DELAY,
           0,
-          aliceVestingAmounts[0].immediateReleaseAmount,
           aliceVestingAmounts[0].amountTotal,
           true
         )
@@ -286,7 +305,6 @@ describe('TokenVesting-Test', () => {
           aliceAddress, 
           currentTimestamp + VESTING_TIME_DELAY,
           1,
-          aliceVestingAmounts[1].immediateReleaseAmount,
           aliceVestingAmounts[1].amountTotal,
           false
         )
@@ -299,7 +317,6 @@ describe('TokenVesting-Test', () => {
           bobAddress, 
           currentTimestamp + VESTING_TIME_DELAY,
           2,
-          bobVestingAmounts[0].immediateReleaseAmount,
           bobVestingAmounts[0].amountTotal,
           true
         )
@@ -310,11 +327,8 @@ describe('TokenVesting-Test', () => {
     it('Check getWithdrawableAmount', async () => {
       const expectedAmount = VESTING_TOKEN_AMOUNT
         .sub(aliceVestingAmounts[0].amountTotal)
-        .sub(aliceVestingAmounts[0].immediateReleaseAmount)
         .sub(aliceVestingAmounts[1].amountTotal)
-        .sub(aliceVestingAmounts[1].immediateReleaseAmount)
         .sub(bobVestingAmounts[0].amountTotal)
-        .sub(bobVestingAmounts[0].immediateReleaseAmount);
       expect(await vestingContract.getWithdrawableAmount())
         .to.equal(expectedAmount);
       console.log("Withdrawal amount is: ", formatUnits(expectedAmount));
@@ -355,20 +369,20 @@ describe('TokenVesting-Test', () => {
     })
     it('ComputeReleasableAmount before vesting', async () => {
       expect(await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[0]))
-        .to.equal(aliceVestingAmounts[0].immediateReleaseAmount);
+        .to.equal(0);
       expect(await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[1]))
-        .to.equal(aliceVestingAmounts[1].immediateReleaseAmount);
+        .to.equal(0);
       expect(await vestingContract.computeReleasableAmount(bobVestingScheduleIds[0]))
-        .to.equal(bobVestingAmounts[0].immediateReleaseAmount);
+        .to.equal(0);
     })
     it('ComputeReleasableAmount in the first month(Cliff period)', async () => {
       await helpers.time.increase(VESTING_TIME_DELAY + ONE_MONTH * 0.5);
       expect(await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[0]))
-        .to.equal(aliceVestingAmounts[0].immediateReleaseAmount);
+        .to.equal(0);
       expect(await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[1]))
-        .to.equal(aliceVestingAmounts[1].immediateReleaseAmount);
+        .to.equal(0);
       expect(await vestingContract.computeReleasableAmount(bobVestingScheduleIds[0]))
-        .to.equal(bobVestingAmounts[0].immediateReleaseAmount);
+        .to.equal(0);
     })
     it('ComputeReleasableAmount in the 6th month(Vesting period)', async () => {
       await helpers.time.increase(VESTING_TIME_DELAY + ONE_MONTH * 5);
@@ -376,21 +390,15 @@ describe('TokenVesting-Test', () => {
       const computedAmountForAlice1 = await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[0]);
       const computedAmountForAlice2 = await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[1]);
       const computedAmountForBob1 = await vestingContract.computeReleasableAmount(bobVestingScheduleIds[0]);
-      let expectedAmountForAlice1 = aliceVestingAmounts[0].immediateReleaseAmount;
-      let expectedAmountForAlice2 = aliceVestingAmounts[1].immediateReleaseAmount; 
-      let expectedAmountForBob1 = bobVestingAmounts[0].immediateReleaseAmount;
       const totalPercents: number[] = [0, 0, 0];
       for (let i = 0; i < 6; i ++) {
         totalPercents[0] += vestingGroupMonthUnlockPercents[0][i];
         totalPercents[1] += vestingGroupMonthUnlockPercents[1][i];
         totalPercents[2] += vestingGroupMonthUnlockPercents[2][i];
       }
-      expectedAmountForAlice1 = expectedAmountForAlice1
-        .add(aliceVestingAmounts[0].amountTotal.mul(totalPercents[0]).div(10000));
-      expectedAmountForAlice2 = expectedAmountForAlice2
-        .add(aliceVestingAmounts[1].amountTotal.mul(totalPercents[1]).div(10000));
-      expectedAmountForBob1 = expectedAmountForBob1
-        .add(bobVestingAmounts[0].amountTotal.mul(totalPercents[2]).div(10000));
+      let expectedAmountForAlice1 = aliceVestingAmounts[0].amountTotal.mul(totalPercents[0]).div(10000);
+      let expectedAmountForAlice2 = aliceVestingAmounts[1].amountTotal.mul(totalPercents[1]).div(10000);
+      let expectedAmountForBob1 = bobVestingAmounts[0].amountTotal.mul(totalPercents[2]).div(10000);
       
       console.log("computedAmountForAlice1: ", formatUnits(computedAmountForAlice1));
       console.log("expectedAmountForAlice1: ", formatUnits(expectedAmountForAlice1));
@@ -408,12 +416,9 @@ describe('TokenVesting-Test', () => {
       const computedAmountForAlice1 = await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[0]);
       const computedAmountForAlice2 = await vestingContract.computeReleasableAmount(aliceVestingScheduleIds[1]);
       const computedAmountForBob1 = await vestingContract.computeReleasableAmount(bobVestingScheduleIds[0]);
-      let expectedAmountForAlice1 = aliceVestingAmounts[0].immediateReleaseAmount
-        .add(aliceVestingAmounts[0].amountTotal);
-      let expectedAmountForAlice2 = aliceVestingAmounts[1].immediateReleaseAmount
-        .add(aliceVestingAmounts[1].amountTotal); 
-      let expectedAmountForBob1 = bobVestingAmounts[0].immediateReleaseAmount
-        .add(bobVestingAmounts[0].amountTotal);
+      let expectedAmountForAlice1 = aliceVestingAmounts[0].amountTotal;
+      let expectedAmountForAlice2 = aliceVestingAmounts[1].amountTotal; 
+      let expectedAmountForBob1 = bobVestingAmounts[0].amountTotal;
 
       console.log("computedAmountForAlice1: ", formatUnits(computedAmountForAlice1));
       console.log("expectedAmountForAlice1: ", formatUnits(expectedAmountForAlice1));
@@ -461,8 +466,7 @@ describe('TokenVesting-Test', () => {
         .connect(alice)
         .release(
           aliceVestingScheduleIds[0], 
-          aliceVestingAmounts[0].immediateReleaseAmount
-          .add("10")
+          getBigNumber("10")
         )
       ).to.be.revertedWith("NotEnoughTokens");
 
@@ -472,7 +476,6 @@ describe('TokenVesting-Test', () => {
         .release(
           aliceVestingScheduleIds[0], 
           aliceVestingAmounts[0].amountTotal
-          .add(aliceVestingAmounts[0].immediateReleaseAmount)
           .add("100")
         )
       ).to.be.revertedWith("NotEnoughTokens");
@@ -586,7 +589,6 @@ describe('TokenVesting-Test', () => {
       expect(await polarTokenContract.balanceOf(treasuryAddress)).to.equal(
         treauryPolarTokenAmounts
         .add(bobVestingAmounts[0].amountTotal)
-        .add(bobVestingAmounts[0].immediateReleaseAmount)
         .sub(bobPolarTokenAmounts)
       );
 
@@ -620,7 +622,6 @@ describe('TokenVesting-Test', () => {
       
       expect(alicePolarTokenAmounts).to.equal(
         aliceVestingAmounts[0].amountTotal
-        .add(aliceVestingAmounts[0].immediateReleaseAmount)
       );
     })
     after(async () => {

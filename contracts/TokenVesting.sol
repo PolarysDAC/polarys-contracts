@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
 
 /// cannot create vesting schedule because not sufficient tokens
 error InsufficientTokens();
@@ -42,12 +41,10 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         // beneficiary of tokens after they are released
         address beneficiary;
         // vesting start timestamp
-        uint256 startTimestamp;
+        uint128 startTimestamp;
         // vesting group id
-        uint256 vestingGroupId;
-        // the amount that is immediately vested at grant
-        uint256 immediateVestedAmount;
-        // total amount of tokens to be released at the end of the vesting EXCLUDING immediateVestedAmount
+        uint128 vestingGroupId;
+        // total amount of tokens to be released at the end of the vesting
         uint256 amountTotal;
         // amount of tokens released
         uint256 released;
@@ -75,9 +72,11 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
     );
     event Revoked(bytes32 vestingScheduleId, uint256 revokeTimestamp);
 
-    constructor(IERC20 _polarysToken, address _treasury, address _owner) {
-        require(_treasury != address(0), "Treasury can't be zero address");
-        polarysToken = _polarysToken;
+    constructor(address _polarysTokenAddress, address _treasury, address _owner) {
+        require(_treasury != address(0), "Treasury cannot be zero address");
+        require(_polarysTokenAddress != address(0), "PolarysToken cannot be zero address");
+        require(_owner != address(0), "Owner cannot be zero address");
+        polarysToken = IERC20(_polarysTokenAddress);
         treasury = _treasury;
         _setupRole(DEFAULT_ADMIN_ROLE, _owner);
     }
@@ -98,39 +97,41 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
      * @param monthUnlockPercentList month unlock percents(%), has 2 decimals
      */
     function setUnlockMonthSchedule(uint256 vestingGroupIndex, uint256[] calldata monthUnlockPercentList) external onlyRole(VESTING_ROLE) {
-        uint256[] memory monthPercentList = monthUnlockPercentList;
-        uint256 monthCount = monthPercentList.length;
+        uint256 originalMonthCount = _monthUnlockPercentSchedules[vestingGroupIndex].length;
+        require(originalMonthCount == 0, "Month schedule has already set");
+        uint256 monthCount = monthUnlockPercentList.length;
         uint256 totalPercents;
         for(uint256 i; i < monthCount; i = _unsafe_inc(i)) {
-            unchecked {
-                totalPercents = totalPercents + monthPercentList[i];
+            if (totalPercents > 0) {
+                require(monthUnlockPercentList[i] > 0, "Invalid month schedules");
             }
-            require(totalPercents <= 10000, "TotalPercent is limited to 100%");
+            unchecked {
+                totalPercents = totalPercents + monthUnlockPercentList[i];
+            }
         }
-        _monthUnlockPercentSchedules[vestingGroupIndex] = monthPercentList;
-        emit SetUnlockMonthSchedule(vestingGroupIndex, monthPercentList);
+        require(totalPercents == 10000, "TotalPercent is limited to 100%");
+        _monthUnlockPercentSchedules[vestingGroupIndex] = monthUnlockPercentList;
+        emit SetUnlockMonthSchedule(vestingGroupIndex, monthUnlockPercentList);
     }
 
     /** @notice Creates a new vesting schedule for a beneficiary
       * @param _beneficiary token recipient address 
       * @param _startTimestamp vesting start timestamp
       * @param _vestingGroupId vesting group id
-      * @param _immediateReleaseAmount initial release amount for _beneficiary
-      * @param _amountTotal total vesting amount exclude _immediateReleaseAmount
+      * @param _amountTotal total vesting amount
       * @param _revocable check whether revocable
     */ 
     function createVestingSchedule(
         address _beneficiary,
-        uint256 _startTimestamp,
-        uint256 _vestingGroupId,
-        uint256 _immediateReleaseAmount,
+        uint128 _startTimestamp,
+        uint128 _vestingGroupId,
         uint256 _amountTotal,
         bool _revocable
     ) external onlyRole(VESTING_ROLE) {
         if (_beneficiary == address(0)) revert ZeroAddress();
         if (_startTimestamp < block.timestamp) revert InvalidStartTimestamp();
         if (_monthUnlockPercentSchedules[_vestingGroupId].length == 0) revert InvalidVestingGroupId();
-        if (getWithdrawableAmount() < (_amountTotal + _immediateReleaseAmount)) revert InsufficientTokens();
+        if (getWithdrawableAmount() < _amountTotal) revert InsufficientTokens();
         if (_amountTotal == 0) revert AmountInvalid();
 
         bytes32 vestingScheduleId = _computeNextVestingScheduleIdForHolder(
@@ -140,13 +141,12 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
             beneficiary: _beneficiary,
             startTimestamp: _startTimestamp,
             vestingGroupId: _vestingGroupId,
-            immediateVestedAmount: _immediateReleaseAmount,
             amountTotal: _amountTotal,
             released: 0,
             revocable: _revocable,
             revoked: false
         });
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount + _amountTotal + _immediateReleaseAmount;
+        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount + _amountTotal;
         vestingSchedulesIds.push(vestingScheduleId);
         uint256 currentVestingCount = holdersVestingScheduleCount[_beneficiary];
         holdersVestingScheduleCount[_beneficiary] = currentVestingCount + 1;
@@ -169,7 +169,6 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         }
         unchecked {
             uint256 unreleased = vestingSchedule.amountTotal 
-            + vestingSchedule.immediateVestedAmount
             - vestingSchedule.released;
             vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - unreleased;
             vestingSchedule.revoked = true;
@@ -259,15 +258,12 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         view
         returns (uint256)
     {   
-        VestingSchedule memory memoryVestingSchedule = vestingSchedules[
+        VestingSchedule memory vestingSchedule = vestingSchedules[
             vestingScheduleId
         ];
-        require(memoryVestingSchedule.beneficiary != address(0), "Invalid vestingScheduleId");
-        if (memoryVestingSchedule.revoked)
+        require(vestingSchedule.beneficiary != address(0), "Invalid vestingScheduleId");
+        if (vestingSchedule.revoked)
             revert ScheduleRevoked();
-        VestingSchedule storage vestingSchedule = vestingSchedules[
-            vestingScheduleId
-        ];
         return _computeReleasableAmount(vestingSchedule);
     }
 
@@ -280,32 +276,31 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
         view
         returns (uint256)
     {
-        unchecked {
-            uint256 currentTime = block.timestamp;
-            uint256 vestedAmountByDefault = vestingSchedule.immediateVestedAmount - vestingSchedule.released;
-            if (vestingSchedule.startTimestamp > currentTime) { // vesting is not started yet
-                return vestedAmountByDefault;
-            }
-            uint256 monthCount = ((currentTime - vestingSchedule.startTimestamp) / 30 days) + 1;
-            uint256[] memory monthUnlockPercentList = _monthUnlockPercentSchedules[vestingSchedule.vestingGroupId];
-            if (monthCount > monthUnlockPercentList.length) {   // vesting period is ended
-                return vestingSchedule.amountTotal + vestedAmountByDefault;
-            }
+        uint256 currentTime = block.timestamp;
+        if (vestingSchedule.startTimestamp > currentTime) { // vesting is not started yet
+            return 0;
+        }
+        uint256 monthCount = ((currentTime - vestingSchedule.startTimestamp) / 30 days) + 1;
+        uint256[] memory monthUnlockPercentList = _monthUnlockPercentSchedules[vestingSchedule.vestingGroupId];
+        if (monthCount > monthUnlockPercentList.length) {   // vesting period is ended
+            return vestingSchedule.amountTotal - vestingSchedule.released;
+        }
 
-            uint256 unlockPercent = monthUnlockPercentList[monthCount-1];
-            if (unlockPercent == 0) {   // cliff period
-                return vestedAmountByDefault;
-            }
-            
-            // vesting period
-            uint256 totalPercents;
-            for (uint256 index; index < monthCount; ++ index) {
+        uint256 unlockPercent = monthUnlockPercentList[monthCount-1];
+        if (unlockPercent == 0) {   // cliff period
+            return 0;
+        }
+        
+        // vesting period
+        uint256 totalPercents;
+        for (uint256 index; index < monthCount; index = _unsafe_inc(index)) {
+            unchecked {
                 totalPercents = totalPercents + monthUnlockPercentList[index];
             }
-            uint256 vestedAmount = vestingSchedule.amountTotal * totalPercents / 10000;
-            vestedAmount = vestedAmount + vestedAmountByDefault;
-            return vestedAmount;
         }
+        uint256 vestedAmount = vestingSchedule.amountTotal * totalPercents / 10000;
+        vestedAmount = vestedAmount - vestingSchedule.released;
+        return vestedAmount;
     }
 
     /**

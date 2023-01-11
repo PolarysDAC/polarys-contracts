@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 interface AggregatorV3Interface {
     function latestRoundData()
@@ -26,7 +27,7 @@ error NotAllowedInPrivateSale(address account);
 contract PolarDepositContract is AccessControl, EIP712 {
     using SafeERC20 for IERC20;
     
-    AggregatorV3Interface internal priceFeed;
+    AggregatorV3Interface internal immutable priceFeed;
 
     event DepositedToken(address indexed tokenAddress, address indexed sender, uint256 quantity, uint256 status, uint256 amount);
     event WithdrawedToken(address indexed tokenAddress, address indexed recipient, uint256 amount);
@@ -50,6 +51,8 @@ contract PolarDepositContract is AccessControl, EIP712 {
         address priceAggregator, 
         address depositRoleAccount
     ) EIP712("PolarDepositContract", "1.0.0") {
+        require(acceptToken != address(0), "AcceptToken cannot be zero address");
+        require(priceAggregator != address(0), "PriceAggregator cannot be zero address");
         _acceptToken = acceptToken;
         priceFeed = AggregatorV3Interface(priceAggregator);
         _setupRole(DEFAULT_ADMIN_ROLE, owner);
@@ -85,7 +88,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
         uint256 status, 
         bool isWhitelisted,
         bytes calldata signature
-    ) external {
+    ) external nonReentrant {
         require(_msgSender() == tx.origin, "Contract address is not allowed");
         require(block.timestamp <= deadline, "Invalid expiration in deposit");
         require(status > 0, "Sale is not started yet");
@@ -100,6 +103,7 @@ contract PolarDepositContract is AccessControl, EIP712 {
         emit DepositedToken(_acceptToken, _msgSender(), quantity, status, amount);
     }
     
+    /// @dev Deposit native token
     function depositNativeToken() payable external {
         ( , int nativeTokenPrice, , , ) = priceFeed.latestRoundData();
 
