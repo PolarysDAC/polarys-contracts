@@ -105,9 +105,7 @@ contract TokenVesting is AccessControl, ReentrancyGuard {
             if (totalPercents > 0) {
                 require(monthUnlockPercentList[i] > 0, "Invalid month schedules");
             }
-            unchecked {
-                totalPercents = totalPercents + monthUnlockPercentList[i];
-            }
+            totalPercents = totalPercents + monthUnlockPercentList[i];
         }
         require(totalPercents == 10000, "TotalPercent is limited to 100%");
         _monthUnlockPercentSchedules[vestingGroupIndex] = monthUnlockPercentList;
